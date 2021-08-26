@@ -22,7 +22,10 @@ app = FastAPI(
 )
 
 mimetypes.init()
-UPLOAD_FOLDER = 'data'
+
+APP_ROOT = os.path.dirname(os.path.realpath(__file__))
+
+UPLOAD_FOLDER = os.path.join(APP_ROOT, 'data')
 
 
 @app.middleware("http")
@@ -34,7 +37,7 @@ async def add_headers(request: Request, call_next):
     response.headers["Pragma"] = "no-cache"
     return response
 
-with open(os.path.join(os.path.dirname(os.path.realpath(__file__)), 'config.json')) as f_config:
+with open(os.path.join(APP_ROOT, 'config.json')) as f_config:
     config = json.load(f_config)
 
 
@@ -84,7 +87,10 @@ def calculate_temperature_score(
     Calculate the temperature score for a given set of parameters.
     """
     try:
-        data_providers = ITR.utils.get_data_providers(config["data_providers"], data_providers)
+        dataproviders_config = config["data_providers"]
+        for dataprovider in dataproviders_config:
+            dataprovider["parameters"]["path"] = os.path.join(APP_ROOT, dataprovider["parameters"]["path"])
+        data_providers = ITR.utils.get_data_providers(dataproviders_config, data_providers)
         portfolio_data = ITR.utils.get_data(data_providers, companies)
         scores, aggregations = ITR.utils.calculate(
             portfolio_data=portfolio_data,
