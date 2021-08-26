@@ -1,7 +1,7 @@
 import requests
 import json
 
-url = "http://127.0.0.1:5000/temperature_score"
+url = "http://localhost:8080/temperature_score"
 
 payload = json.dumps({
     "aggregate": True,
