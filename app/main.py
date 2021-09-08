@@ -89,7 +89,8 @@ def calculate_temperature_score(
     try:
         dataproviders_config = config["data_providers"]
         for dataprovider in dataproviders_config:
-            dataprovider["parameters"]["path"] = os.path.join(APP_ROOT, dataprovider["parameters"]["path"])
+            dataprovider["parameters"]["company_path"] = os.path.join(APP_ROOT, dataprovider["parameters"]["company_path"])
+            dataprovider["parameters"]["sector_path"] = os.path.join(APP_ROOT, dataprovider["parameters"]["sector_path"])
         data_providers = ITR.utils.get_data_providers(dataproviders_config, data_providers)
         portfolio_data = ITR.utils.get_data(data_providers, companies)
         scores, aggregations = ITR.utils.calculate(
@@ -144,32 +145,6 @@ def parse_portfolio(file: bytes = File(...), skiprows: int = Form(...)):
     return df.replace(r'^\s*$', np.nan, regex=True).dropna(how='all').replace({np.nan: None}).to_dict(orient="records")
 
 
-@app.post("/import_data_provider/")
-def import_data_provider(file: UploadFile = File(...)):
-    """
-    Import a new Excel data provider file. This will overwrite the current "dummy" data provider input file.
-
-    *Note: This endpoint is only for use in the frontend during the beta testing phase.*
-    """
-    # TODO: Remove this endpoint after the beta testing phase
-    file_name = file.filename
-    file_type = file_name.split('.')[-1]
-    if file_type == 'xlsx':
-        x = 10000000 / 10000
-        xi = 0
-        with open(os.path.join(UPLOAD_FOLDER, 'input_format_tmp.xlsx'), 'ab') as f:
-            for chunk in iter(lambda: file.file.read(10000), b''):
-                f.write(chunk)
-                xi += 1
-                if xi > x:
-                    f.close()
-                    os.remove(os.path.join(UPLOAD_FOLDER, 'input_format_tmp.xlsx'))
-                    return {'POST Request': {'Response': {'Status Code': 400, 'Message': 'Error. File did not save.'}}}
-        os.replace(os.path.join(UPLOAD_FOLDER, 'input_format_tmp.xlsx'),
-                   os.path.join(UPLOAD_FOLDER, 'input_format.xlsx'))
-        return {'detail': 'Data Provider Imported'}
-    else:
-        raise HTTPException(status_code=500, detail='Error. File did not save.')
 
 
 if __name__ == "__main__":
