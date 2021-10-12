@@ -1,6 +1,5 @@
 import json
 import os
-
 from typing import List, Optional
 
 import pandas as pd
@@ -8,17 +7,19 @@ import numpy as np
 import uvicorn
 from ITR.interfaces import PortfolioCompany, EScope, ETimeFrames, ScoreAggregations
 
-from fastapi import FastAPI, File, Form, UploadFile, Body, HTTPException, Request
+from fastapi import FastAPI, File, Form, Body, HTTPException, Request
 from pydantic import BaseModel
 import mimetypes
 import ITR
+from ITR.data.excel import ExcelProviderCompany, ExcelProviderProductionBenchmark, ExcelProviderIntensityBenchmark
+from ITR.data.data_warehouse import DataWarehouse
 from ITR.portfolio_aggregation import PortfolioAggregationMethod
 
 app = FastAPI(
     title="ITR Temperature Alignment tool API",
     description="This tool helps companies and financial institutions to assess the temperature alignment of current "
                 "targets, commitments, and investment and lending portfolios.",
-    version="0.2.0",
+    version="0.2.0"
 )
 
 mimetypes.init()
@@ -36,6 +37,7 @@ async def add_headers(request: Request, call_next):
     response.headers["Cache-Control"] = "no-cache"
     response.headers["Pragma"] = "no-cache"
     return response
+
 
 with open(os.path.join(APP_ROOT, 'config.json')) as f_config:
     config = json.load(f_config)
@@ -57,10 +59,6 @@ def calculate_temperature_score(
             default=config["default_score"],
             gte=0,
             description="The default score to fall back on when there's no target available."),
-        data_providers: Optional[List[str]] = Body(
-            default=[],
-            description="A list of data provider names to use. These names should be available in the list that can be "
-                        "retrieved through the /data_providers/ endpoint."),
         aggregation_method: Optional[PortfolioAggregationMethod] = Body(
             default=config["aggregation_method"],
             description="The aggregation method to use."),
@@ -87,12 +85,13 @@ def calculate_temperature_score(
     Calculate the temperature score for a given set of parameters.
     """
     try:
-        dataproviders_config = config["data_providers"]
-        for dataprovider in dataproviders_config:
-            dataprovider["parameters"]["company_path"] = os.path.join(APP_ROOT, dataprovider["parameters"]["company_path"])
-            dataprovider["parameters"]["sector_path"] = os.path.join(APP_ROOT, dataprovider["parameters"]["sector_path"])
-        data_providers = ITR.utils.get_data_providers(dataproviders_config, data_providers)
-        portfolio_data = ITR.utils.get_data(data_providers, companies)
+        excel_company_data = ExcelProviderCompany(excel_path="data/test_data_company.xlsx")
+        excel_production_bm = ExcelProviderProductionBenchmark(excel_path="data/OECM_EI_and_production_benchmarks.xlsx")
+        excel_EI_bm = ExcelProviderIntensityBenchmark(excel_path="data/OECM_EI_and_production_benchmarks.xlsx",
+                                                      benchmark_temperature=1.5,
+                                                      benchmark_global_budget=396, is_AFOLU_included=False)
+        excel_provider = DataWarehouse(excel_company_data, excel_production_bm, excel_EI_bm)
+        portfolio_data = ITR.utils.get_data(excel_provider, companies)
         scores, aggregations = ITR.utils.calculate(
             portfolio_data=portfolio_data,
             fallback_score=default_score,
@@ -112,10 +111,13 @@ def calculate_temperature_score(
     include_columns = ["company_name", "scope", "time_frame", "temperature_score"] + \
                       [column for column in include_columns if column in scores.columns]
 
+    #clean scores:
+    scores = scores.where(pd.notnull(scores), None).replace({np.nan: None})
+
     return ResponseTemperatureScore(
         aggregated_scores=aggregations,
-        scores=scores.where(pd.notnull(scores), None).to_dict(orient="records"),
-        companies=scores[include_columns].replace({np.nan: None}).to_dict(orient="records")
+        scores=scores.to_dict(orient="records"),
+        companies=scores[include_columns].to_dict(orient="records")
     )
 
 
@@ -143,8 +145,6 @@ def parse_portfolio(file: bytes = File(...), skiprows: int = Form(...)):
     df = pd.read_excel(file, skiprows=int(skiprows))
 
     return df.replace(r'^\s*$', np.nan, regex=True).dropna(how='all').replace({np.nan: None}).to_dict(orient="records")
-
-
 
 
 if __name__ == "__main__":
