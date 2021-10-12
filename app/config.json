@@ -8,7 +8,8 @@
       "type": "excel",
       "name": "Excel",
       "parameters": {
-        "path": "data/input_format.xlsx"
+        "company_path": "data/data_provider_example.xlsx",
+        "sector_path": "data/data_sectors.xlsx"
       }
     }
   ],
