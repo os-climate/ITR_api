@@ -5,15 +5,17 @@ from typing import List, Optional
 import pandas as pd
 import numpy as np
 import uvicorn
-from ITR.interfaces import PortfolioCompany, EScope, ETimeFrames, ScoreAggregations
+from ITR.interfaces import PortfolioCompany, EScope, ETimeFrames, ScoreAggregations, ICompanyData, \
+    IEmissionIntensityBenchmarkScopes, IProductionBenchmarkScopes
 
 from fastapi import FastAPI, File, Form, Body, HTTPException, Request
 from pydantic import BaseModel
 import mimetypes
 import ITR
-from ITR.data.excel import ExcelProviderCompany, ExcelProviderProductionBenchmark, ExcelProviderIntensityBenchmark
+from ITR.data.excel import BaseProviderIntensityBenchmark, BaseProviderProductionBenchmark, BaseCompanyDataProvider
 from ITR.data.data_warehouse import DataWarehouse
 from ITR.portfolio_aggregation import PortfolioAggregationMethod
+from ITR.configs import ColumnsConfig
 
 app = FastAPI(
     title="ITR Temperature Alignment tool API",
@@ -26,8 +28,10 @@ mimetypes.init()
 
 APP_ROOT = os.path.dirname(os.path.realpath(__file__))
 
-UPLOAD_FOLDER = os.path.join(APP_ROOT, 'data')
-
+#crystal box access:
+EXCLUDED_COLUMNS_CRYSTAL_BOX = [ColumnsConfig.PROJECTED_TARGETS, ColumnsConfig.PROJECTED_EI]
+EXCLUDED_COLUMNS_GREY_BOX = None #TODO
+EXCLUDED_COLUMNS_BLACK_BOX = None #TODO
 
 @app.middleware("http")
 async def add_headers(request: Request, call_next):
@@ -79,19 +83,26 @@ def calculate_temperature_score(
             description="The scopes that should be included in the results."),
         time_frames: Optional[List[ETimeFrames]] = Body(
             default=[],
-            description="The time frames that should be included in the results.")
+            description="The time frames that should be included in the results."),
+        company_data: List[ICompanyData] = Body(
+            default=[],
+            description="The company fundamental data for the companies to evaluate"),
+        production_benchmarks: IProductionBenchmarkScopes = Body(
+            default=IProductionBenchmarkScopes.parse_obj(config["production_benchmark_OECM"]),
+            description="Production Benchmarks per sector and region"),
+        intensity_benchmarks: IEmissionIntensityBenchmarkScopes = Body(
+            default=IEmissionIntensityBenchmarkScopes.parse_obj(config["intensity_benchmark_OECM"]),
+            description="Intensity Benchmarks per sector and region")
 ) -> ResponseTemperatureScore:
     """
     Calculate the temperature score for a given set of parameters.
     """
     try:
-        excel_company_data = ExcelProviderCompany(excel_path="data/test_data_company.xlsx")
-        excel_production_bm = ExcelProviderProductionBenchmark(excel_path="data/OECM_EI_and_production_benchmarks.xlsx")
-        excel_EI_bm = ExcelProviderIntensityBenchmark(excel_path="data/OECM_EI_and_production_benchmarks.xlsx",
-                                                      benchmark_temperature=1.5,
-                                                      benchmark_global_budget=396, is_AFOLU_included=False)
-        excel_provider = DataWarehouse(excel_company_data, excel_production_bm, excel_EI_bm)
-        portfolio_data = ITR.utils.get_data(excel_provider, companies)
+        company_data_provider = BaseCompanyDataProvider(company_data)
+        production_bm_provider = BaseProviderProductionBenchmark(production_benchmarks)
+        intensity_bm_provider = BaseProviderIntensityBenchmark(intensity_benchmarks)
+        data_warehouse = DataWarehouse(company_data_provider, production_bm_provider, intensity_bm_provider)
+        portfolio_data = ITR.utils.get_data(data_warehouse, companies)
         scores, aggregations = ITR.utils.calculate(
             portfolio_data=portfolio_data,
             fallback_score=default_score,
@@ -111,8 +122,9 @@ def calculate_temperature_score(
     include_columns = ["company_name", "scope", "time_frame", "temperature_score"] + \
                       [column for column in include_columns if column in scores.columns]
 
-    #clean scores:
+    # clean scores:
     scores = scores.where(pd.notnull(scores), None).replace({np.nan: None})
+    scores = scores.drop(columns=EXCLUDED_COLUMNS_CRYSTAL_BOX)
 
     return ResponseTemperatureScore(
         aggregated_scores=aggregations,
