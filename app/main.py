@@ -28,10 +28,11 @@ mimetypes.init()
 
 APP_ROOT = os.path.dirname(os.path.realpath(__file__))
 
-#crystal box access:
+# crystal box access:
 EXCLUDED_COLUMNS_CRYSTAL_BOX = [ColumnsConfig.PROJECTED_TARGETS, ColumnsConfig.PROJECTED_EI]
-EXCLUDED_COLUMNS_GREY_BOX = None #TODO
-EXCLUDED_COLUMNS_BLACK_BOX = None #TODO
+EXCLUDED_COLUMNS_GREY_BOX = None  # TODO
+EXCLUDED_COLUMNS_BLACK_BOX = None  # TODO
+
 
 @app.middleware("http")
 async def add_headers(request: Request, call_next):
@@ -88,10 +89,14 @@ def calculate_temperature_score(
             default=[],
             description="The company fundamental data for the companies to evaluate"),
         production_benchmarks: IProductionBenchmarkScopes = Body(
-            default=IProductionBenchmarkScopes.parse_obj(config["production_benchmark_OECM"]),
+            default=IProductionBenchmarkScopes.parse_obj(
+                next(benchmark["data"] for benchmark in config["benchmarks"]["production"] if
+                     benchmark["name"] == "OECM")),
             description="Production Benchmarks per sector and region"),
         intensity_benchmarks: IEmissionIntensityBenchmarkScopes = Body(
-            default=IEmissionIntensityBenchmarkScopes.parse_obj(config["intensity_benchmark_OECM"]),
+            default=IEmissionIntensityBenchmarkScopes.parse_obj(
+                next(benchmark["data"] for benchmark in config["benchmarks"]["emission_intensity"] if
+                     benchmark["name"] == "OECM")),
             description="Intensity Benchmarks per sector and region")
 ) -> ResponseTemperatureScore:
     """
@@ -133,18 +138,32 @@ def calculate_temperature_score(
     )
 
 
-class ResponseDataProvider(BaseModel):
+class ResponseEmissionIntensityBenchmarks(BaseModel):
     name: str
-    type: str
+    data: IEmissionIntensityBenchmarkScopes
 
 
-@app.get("/data_providers/", response_model=List[ResponseDataProvider])
-def get_data_providers() -> List[ResponseDataProvider]:
+@app.get("/emission_intensity_benchmarks/", response_model=List[ResponseEmissionIntensityBenchmarks])
+def get_emission_intensity_benchmarks() -> List[ResponseEmissionIntensityBenchmarks]:
     """
     Get a list of the available data providers.
     """
-    return [ResponseDataProvider(name=data_provider["name"], type=data_provider["type"])
-            for data_provider in config["data_providers"]]
+    return [ResponseEmissionIntensityBenchmarks(name=benchmark["name"], data=benchmark["data"])
+            for benchmark in config["benchmarks"]["emission_intensity"]]
+
+
+class ResponseProductionBenchmarks(BaseModel):
+    name: str
+    data: IProductionBenchmarkScopes
+
+
+@app.get("/production_benchmarks/", response_model=List[ResponseProductionBenchmarks])
+def get_emission_intensity_benchmarks() -> List[ResponseProductionBenchmarks]:
+    """
+    Get a list of the available data providers.
+    """
+    return [ResponseProductionBenchmarks(name=benchmark["name"], data=benchmark["data"])
+            for benchmark in config["benchmarks"]["production"]]
 
 
 @app.post("/parse_portfolio/", response_model=List[dict])
