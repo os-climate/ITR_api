@@ -34,7 +34,7 @@ In order to run the docker container locally or non linux machines one needs to 
 
 ### API-only
 
-In order to run a locally build version run:
+In order to run a local build version run:
 
 For building the image the codes relies on source-to-image (s2i). Please install s2i first. the CLI can be found [here](https://github.com/openshift/source-to-image/releases/). Make sure the install location is added to the PATH variable.
 ```bash
