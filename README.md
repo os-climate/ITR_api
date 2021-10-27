@@ -38,7 +38,7 @@ In order to run a local build version run:
 
 For building the image the codes relies on source-to-image (s2i). Please install s2i first. the CLI can be found [here](https://github.com/openshift/source-to-image/releases/). Make sure the install location is added to the PATH variable.
 ```bash
-s2i build . registry.access.redhat.com/ubi8/python-38 -e APP_FILE=app/main.py [YOUR REPO]/[NAME]:[YOUR_TAG] -c
+s2i build . registry.access.redhat.com/ubi8/python-38 -e APP_FILE=app/main.py [YOUR REPO]/[NAME]:[YOUR_TAG] -c 
 ```
 - the build is based in the UBI 8 Python 3.8 base images.
 - '-e APP_FILE=app/main.py' directs s2i to the applications that needs to run
