@@ -158,7 +158,7 @@ class ResponseProductionBenchmarks(BaseModel):
 
 
 @app.get("/production_benchmarks/", response_model=List[ResponseProductionBenchmarks])
-def get_emission_intensity_benchmarks() -> List[ResponseProductionBenchmarks]:
+def get_production_benchmarks() -> List[ResponseProductionBenchmarks]:
     """
     Get a list of the available data providers.
     """
